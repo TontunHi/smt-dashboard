@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="nhsoGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- Clean Circle Background (Theme: White & Green) -->
+  <circle cx="32" cy="32" r="30" fill="#ffffff" stroke="#10b981" stroke-width="2.5" />
+  
+  <!-- Outer Subtle Ring for Medical/Health Badge feel -->
+  <circle cx="32" cy="32" r="26.5" fill="none" stroke="#e6f4ea" stroke-width="1.5" stroke-dasharray="3 3" />
+
+  <!-- Shield Shape (NHSO Protection & Security) -->
+  <path d="M32 12 C39 12 46 15 46 22 C46 34 38 45 32 49 C26 45 18 34 18 22 C18 15 25 12 32 12 Z" 
+        fill="url(#nhsoGreen)" 
+        filter="url(#shadow)" />
+
+  <!-- White Medical / Health Cross Symbol -->
+  <path d="M29 20 H35 V26 H41 V32 H35 V38 H29 V32 H23 V26 H29 Z" 
+        fill="#ffffff" />
+
+  <!-- Dynamic Financial / Tracking Trend Line in pure Emerald -->
+  <path d="M20 37 L28 29 L34 33 L44 23" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="2" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" 
+        opacity="0.9" />
+
+  <!-- Little Growth Arrow -->
+  <path d="M39 23 H44 V28" 
+        fill="none" 
+        stroke="#ffffff" 
+        stroke-width="2" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+</svg>
