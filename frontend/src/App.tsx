@@ -17,6 +17,7 @@ import {
   ChevronRight,
   ExternalLink,
   Layers,
+  GitFork,
   Calendar
 } from 'lucide-react';
 import './index.css';
@@ -71,8 +72,9 @@ export default function App() {
   const [vendorId5Digit, setVendorId5Digit] = useState('11152');
   const [zoneId, setZoneId] = useState('');
   
-  // Fund Filter State
+  // Fund & SubFund Filter State
   const [selectedFund, setSelectedFund] = useState<string>('ALL');
+  const [selectedSubFund, setSelectedSubFund] = useState<string>('ALL');
 
   // Realtime Polling
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(0);
@@ -177,18 +179,36 @@ export default function App() {
     return Array.from(fundsSet).sort();
   }, [records]);
 
+  // Extract unique subfund names list (กองทุนย่อยเฉพาะด้าน) based on selectedFund
+  const availableSubFunds = useMemo(() => {
+    const subFundsSet = new Set<string>();
+    records.forEach(r => {
+      const rawFund = r.fundGroupDescr || r.fundName;
+      const fund = normalizeFundName(rawFund);
+      if (selectedFund === 'ALL' || fund === selectedFund) {
+        const sub = (r.efundDesc || r.fundDescr || '').trim();
+        if (sub) subFundsSet.add(sub);
+      }
+    });
+    return Array.from(subFundsSet).sort();
+  }, [records, selectedFund]);
+
   // Format Currency
   const formatCurrency = (val: number | undefined) => {
     if (val === undefined || val === null) return '0.00';
     return new Intl.NumberFormat('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
   };
 
-  // Filtered records by Normalized Fund and Search Term
+  // Filtered records by Normalized Fund, SubFund, and Search Term
   const filteredRecords = useMemo(() => {
     return records.filter(r => {
       const raw = r.fundGroupDescr || r.fundName || '';
       const fund = normalizeFundName(raw);
       if (selectedFund !== 'ALL' && fund !== selectedFund) {
+        return false;
+      }
+      const sub = (r.efundDesc || r.fundDescr || '').trim();
+      if (selectedSubFund !== 'ALL' && sub !== selectedSubFund) {
         return false;
       }
       if (!searchTerm.trim()) return true;
@@ -203,7 +223,7 @@ export default function App() {
         (r.mophId && String(r.mophId).includes(term))
       );
     });
-  }, [records, selectedFund, searchTerm]);
+  }, [records, selectedFund, selectedSubFund, searchTerm]);
 
   // Dynamic KPI summary based on filtered records
   const dynamicSummary: BudgetSummary = useMemo(() => {
@@ -256,20 +276,28 @@ export default function App() {
     const yearsList = [...selectedYears].sort();
     
     if (yearsList.length > 1) {
-      if (selectedFund !== 'ALL') {
-        // When a specific fund is selected (e.g. กองทุนสร้างเสริมสุขภาพฯ), compare by Year along X-axis
+      if (selectedFund !== 'ALL' || selectedSubFund !== 'ALL') {
+        // When a specific fund or subfund is selected, compare by Year along X-axis
         const yearAmounts = yearsList.map(yr => {
           const sum = records
-            .filter(r => (r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0])) && 
-                         normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund)
+            .filter(r => {
+              const matchesYear = r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0]);
+              const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
+              const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
+              return matchesYear && matchesFund && matchesSub;
+            })
             .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
           return Math.round(sum);
         });
 
         const yearTotals = yearsList.map(yr => {
           const sum = records
-            .filter(r => (r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0])) && 
-                         normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund)
+            .filter(r => {
+              const matchesYear = r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0]);
+              const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
+              const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
+              return matchesYear && matchesFund && matchesSub;
+            })
             .reduce((acc, cur) => acc + (Number(cur.total) || 0), 0);
           return Math.round(sum);
         });
@@ -443,14 +471,27 @@ export default function App() {
         ]
       };
     }
-  }, [selectedYears, selectedFund, records, availableFunds, filteredRecords]);
+  }, [selectedYears, selectedFund, selectedSubFund, records, availableFunds, filteredRecords]);
 
   // Chart 2: Budget Breakdown (Donut)
   // When a specific fund is selected, drill down by subfund (efundDesc) or by Year!
   const fundGroupChartOption = useMemo(() => {
     const groupMap: { [key: string]: number } = {};
     
-    if (selectedFund !== 'ALL') {
+    if (selectedSubFund !== 'ALL') {
+      // Subfund selected: show breakdown by year (if multi-year) or single slice
+      if (selectedYears.length > 1) {
+        filteredRecords.forEach(r => {
+          const yrName = `ปี ${r.fiscalYear || selectedYears[0]}`;
+          groupMap[yrName] = (groupMap[yrName] || 0) + (Number(r.amount) || 0);
+        });
+      } else {
+        filteredRecords.forEach(r => {
+          const name = r.refDocNo || r.batchNo || selectedSubFund;
+          groupMap[name] = (groupMap[name] || 0) + (Number(r.amount) || 0);
+        });
+      }
+    } else if (selectedFund !== 'ALL') {
       // If multi-year is active, breakdown by Year!
       if (selectedYears.length > 1) {
         filteredRecords.forEach(r => {
@@ -493,7 +534,9 @@ export default function App() {
       },
       series: [
         {
-          name: selectedFund !== 'ALL' ? (selectedYears.length > 1 ? 'สัดส่วนตามปีงบประมาณ' : 'สัดส่วนกองทุนย่อย') : 'หมวดงบประมาณ',
+          name: selectedSubFund !== 'ALL' 
+            ? 'สัดส่วนตามปีงบประมาณ' 
+            : (selectedFund !== 'ALL' ? (selectedYears.length > 1 ? 'สัดส่วนตามปีงบประมาณ' : 'สัดส่วนกองทุนย่อย') : 'หมวดงบประมาณ'),
           type: 'pie',
           radius: ['45%', '70%'],
           center: ['35%', '50%'],
@@ -507,7 +550,7 @@ export default function App() {
         }
       ]
     };
-  }, [filteredRecords, selectedFund, selectedYears]);
+  }, [filteredRecords, selectedFund, selectedSubFund, selectedYears]);
 
   // Export Excel
   const exportToExcel = () => {
@@ -700,9 +743,12 @@ export default function App() {
           <div className="card-title">
             <BarChart3 size={18} color="#38bdf8" />
             {selectedYears.length > 1 
-              ? (selectedFund !== 'ALL'
-                  ? `เปรียบเทียบ ${selectedFund} (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
-                  : `เปรียบเทียบงบประมาณตามกองทุน (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+              ? (selectedSubFund !== 'ALL'
+                  ? `เปรียบเทียบกองทุนย่อย "${selectedSubFund}" (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+                  : (selectedFund !== 'ALL'
+                      ? `เปรียบเทียบ ${selectedFund} (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+                      : `เปรียบเทียบงบประมาณตามกองทุน (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+                    )
                 )
               : `แนวโน้มการโอนงบประมาณรายเดือน (ปี พ.ศ. ${selectedYears[0]})`
             }
@@ -715,12 +761,15 @@ export default function App() {
         <div className="chart-card">
           <div className="card-title">
             <PieIcon size={18} color="#a78bfa" />
-            {selectedFund !== 'ALL'
-              ? (selectedYears.length > 1
-                  ? `สัดส่วนงบประมาณ ${selectedFund} แยกตามปี พ.ศ.`
-                  : `สัดส่วนกองทุนย่อยของ ${selectedFund}`
+            {selectedSubFund !== 'ALL'
+              ? `สัดส่วนงบประมาณ ${selectedSubFund} แยกตามปี พ.ศ.`
+              : (selectedFund !== 'ALL'
+                  ? (selectedYears.length > 1
+                      ? `สัดส่วนงบประมาณ ${selectedFund} แยกตามปี พ.ศ.`
+                      : `สัดส่วนกองทุนย่อยของ ${selectedFund}`
+                    )
+                  : 'สัดส่วนงบประมาณตามกลุ่มกองทุน (Budget Breakdown)'
                 )
-              : 'สัดส่วนงบประมาณตามกลุ่มกองทุน (Budget Breakdown)'
             }
           </div>
           <div style={{ height: '320px' }}>
@@ -743,16 +792,37 @@ export default function App() {
               <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>กองทุน:</label>
               <select 
                 className="form-select"
-                style={{ width: '220px', padding: '7px 10px' }}
+                style={{ width: '210px', padding: '7px 10px' }}
                 value={selectedFund}
                 onChange={(e) => {
                   setSelectedFund(e.target.value);
+                  setSelectedSubFund('ALL');
                   setCurrentPage(1);
                 }}
               >
-                <option value="ALL">ทุุกกองทุน (ทั้งหมด)</option>
+                <option value="ALL">ทุกกองทุน (ทั้งหมด)</option>
                 {availableFunds.map((fund, idx) => (
                   <option key={idx} value={fund}>{fund}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filter by SubFund Dropdown (กองทุนย่อยเฉพาะด้าน) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <GitFork size={15} color="#10b981" />
+              <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>กองทุนย่อยเฉพาะด้าน:</label>
+              <select 
+                className="form-select"
+                style={{ width: '240px', padding: '7px 10px' }}
+                value={selectedSubFund}
+                onChange={(e) => {
+                  setSelectedSubFund(e.target.value);
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="ALL">ทุกกองทุนย่อย (ทั้งหมด)</option>
+                {availableSubFunds.map((sub, idx) => (
+                  <option key={idx} value={sub}>{sub}</option>
                 ))}
               </select>
             </div>
@@ -762,8 +832,8 @@ export default function App() {
               <input 
                 type="text" 
                 className="form-input"
-                style={{ paddingLeft: '32px', width: '240px', padding: '7px 12px 7px 32px' }}
-                placeholder="ค้นหาเลขเอกสาร, กองทุน, งวด..."
+                style={{ paddingLeft: '32px', width: '210px', padding: '7px 12px 7px 32px' }}
+                placeholder="ค้นหาเลขเอกสาร, งวด..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
