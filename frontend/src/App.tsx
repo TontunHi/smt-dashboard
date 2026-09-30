@@ -305,142 +305,80 @@ export default function App() {
     const yearsList = [...selectedYears].sort();
     
     if (yearsList.length > 1) {
-      if (selectedFund !== 'ALL' || selectedSubFund !== 'ALL') {
-        // When a specific fund or subfund is selected, compare by Year along X-axis
-        const yearAmounts = yearsList.map(yr => {
-          const sum = records
-            .filter(r => {
-              const matchesYear = getRecordFiscalYear(r) === yr;
-              const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
-              const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
-              return matchesYear && matchesFund && matchesSub;
-            })
-            .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
-          return Math.round(sum);
-        });
+      // Whether comparing all funds or a specific fund/subfund, compare by Year along X-axis
+      const yearAmounts = yearsList.map(yr => {
+        const sum = records
+          .filter(r => {
+            const matchesYear = getRecordFiscalYear(r) === yr;
+            const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
+            const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
+            return matchesYear && matchesFund && matchesSub;
+          })
+          .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
+        return Math.round(sum);
+      });
 
-        const yearTotals = yearsList.map(yr => {
-          const sum = records
-            .filter(r => {
-              const matchesYear = getRecordFiscalYear(r) === yr;
-              const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
-              const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
-              return matchesYear && matchesFund && matchesSub;
-            })
-            .reduce((acc, cur) => acc + (Number(cur.total) || 0), 0);
-          return Math.round(sum);
-        });
+      const yearTotals = yearsList.map(yr => {
+        const sum = records
+          .filter(r => {
+            const matchesYear = getRecordFiscalYear(r) === yr;
+            const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
+            const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
+            return matchesYear && matchesFund && matchesSub;
+          })
+          .reduce((acc, cur) => acc + (Number(cur.total) || 0), 0);
+        return Math.round(sum);
+      });
 
-        return {
-          backgroundColor: 'transparent',
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: (params: any) => {
-              let str = `<b>ปีงบประมาณ ${params[0].name}</b><br/>`;
-              params.forEach((p: any) => {
-                str += `${p.marker} ${p.seriesName}: ฿${Number(p.value).toLocaleString('th-TH')}<br/>`;
-              });
-              return str;
-            }
-          },
-          legend: {
-            data: ['ยอดจัดสรร (Amount)', 'ยอดโอนสุทธิ (Net Total)'],
-            textStyle: { color: '#475569' },
-            top: '0%'
-          },
-          grid: { left: '3%', right: '4%', bottom: '8%', top: '16%', containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: yearsList.map(yr => `ปีงบ ${yr}`),
-            axisLine: { lineStyle: { color: '#cbd5e1' } },
-            axisLabel: { color: '#475569', fontSize: 12, fontWeight: 500 }
-          },
-          yAxis: {
-            type: 'value',
-            axisLine: { lineStyle: { color: '#cbd5e1' } },
-            splitLine: { lineStyle: { color: '#f1f5f9' } },
-            axisLabel: {
-              color: '#64748b',
-              formatter: (v: number) => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : `${(v/1e3).toFixed(0)}k`
-            }
-          },
-          series: [
-            {
-              name: 'ยอดจัดสรร (Amount)',
-              type: 'bar',
-              data: yearAmounts,
-              itemStyle: { color: '#059669', borderRadius: [4, 4, 0, 0] }
-            },
-            {
-              name: 'ยอดโอนสุทธิ (Net Total)',
-              type: 'bar',
-              data: yearTotals,
-              itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }
-            }
-          ]
-        };
-      } else {
-        // Compare top funds across years
-        const topFunds = availableFunds.slice(0, 7);
-        const seriesList = yearsList.map((yr, idx) => {
-          const colors = ['#059669', '#10b981', '#34d399', '#0d9488', '#14b8a6', '#0284c7'];
-          const data = topFunds.map(fundName => {
-            const sum = records
-              .filter(r => (getRecordFiscalYear(r) === yr) && (normalizeFundName(r.fundGroupDescr || r.fundName) === normalizeFundName(fundName)))
-              .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
-            return Math.round(sum);
-          });
-
-          return {
-            name: `ปีงบ ${yr}`,
+      return {
+        backgroundColor: 'transparent',
+        tooltip: {
+          trigger: 'axis',
+          axisPointer: { type: 'shadow' },
+          formatter: (params: any) => {
+            let str = `<b>ปีงบประมาณ ${params[0].name}</b><br/>`;
+            params.forEach((p: any) => {
+              str += `${p.marker} ${p.seriesName}: ฿${Number(p.value).toLocaleString('th-TH')}<br/>`;
+            });
+            return str;
+          }
+        },
+        legend: {
+          data: ['ยอดจัดสรร (Amount)', 'ยอดโอนสุทธิ (Net Total)'],
+          textStyle: { color: '#475569' },
+          top: '0%'
+        },
+        grid: { left: '3%', right: '4%', bottom: '8%', top: '16%', containLabel: true },
+        xAxis: {
+          type: 'category',
+          data: yearsList.map(yr => `ปีงบ ${yr}`),
+          axisLine: { lineStyle: { color: '#cbd5e1' } },
+          axisLabel: { color: '#475569', fontSize: 12, fontWeight: 500 }
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { lineStyle: { color: '#cbd5e1' } },
+          splitLine: { lineStyle: { color: '#f1f5f9' } },
+          axisLabel: {
+            color: '#64748b',
+            formatter: (v: number) => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : `${(v/1e3).toFixed(0)}k`
+          }
+        },
+        series: [
+          {
+            name: 'ยอดจัดสรร (Amount)',
             type: 'bar',
-            data,
-            itemStyle: { color: colors[idx % colors.length], borderRadius: [4, 4, 0, 0] }
-          };
-        });
-
-        return {
-          backgroundColor: 'transparent',
-          tooltip: {
-            trigger: 'axis',
-            axisPointer: { type: 'shadow' },
-            formatter: (params: any) => {
-              let str = `<b>${params[0].name}</b><br/>`;
-              params.forEach((p: any) => {
-                str += `${p.marker} ${p.seriesName}: ฿${p.value.toLocaleString('th-TH')}<br/>`;
-              });
-              return str;
-            }
+            data: yearAmounts,
+            itemStyle: { color: '#059669', borderRadius: [4, 4, 0, 0] }
           },
-          legend: {
-            data: yearsList.map(y => `ปีงบ ${y}`),
-            textStyle: { color: '#475569' },
-            top: '0%'
-          },
-          grid: { left: '3%', right: '4%', bottom: '8%', top: '16%', containLabel: true },
-          xAxis: {
-            type: 'category',
-            data: topFunds,
-            axisLine: { lineStyle: { color: '#cbd5e1' } },
-            axisLabel: { 
-              color: '#475569', 
-              fontSize: 11,
-              formatter: (v: string) => v.length > 15 ? v.substring(0, 15) + '...' : v
-            }
-          },
-          yAxis: {
-            type: 'value',
-            axisLine: { lineStyle: { color: '#cbd5e1' } },
-            splitLine: { lineStyle: { color: '#f1f5f9' } },
-            axisLabel: {
-              color: '#64748b',
-              formatter: (v: number) => v >= 1e6 ? `${(v/1e6).toFixed(1)}M` : `${(v/1e3).toFixed(0)}k`
-            }
-          },
-          series: seriesList
-        };
-      }
+          {
+            name: 'ยอดโอนสุทธิ (Net Total)',
+            type: 'bar',
+            data: yearTotals,
+            itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }
+          }
+        ]
+      };
     } else {
       // Single Year: Monthly Trend ordered by Fiscal Year (1 Oct - 30 Sep)
       const currentYearNum = parseInt(selectedYears[0] || '2568', 10);
@@ -807,7 +745,7 @@ export default function App() {
                   ? `เปรียบเทียบกองทุนย่อย "${selectedSubFund}" (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
                   : (selectedFund !== 'ALL'
                       ? `เปรียบเทียบ ${selectedFund} (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
-                      : `เปรียบเทียบงบประมาณตามกองทุน (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
+                      : `เปรียบเทียบงบประมาณรวมทุกกองทุน (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
                     )
                 )
               : `แนวโน้มการโอนงบประมาณรายเดือน (ปีงบประมาณ ${selectedYears[0]})`
