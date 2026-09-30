@@ -35,7 +35,7 @@ CACHE_STORE: Dict[str, tuple[float, Any]] = {}
 DEFAULT_CACHE_TTL_SECONDS = 600  # 10 minutes
 
 class MultiBudgetFilterRequest(BaseModel):
-    budgetYears: List[str] = Field(default=["2567"], description="รายการปีงบประมาณ พ.ศ. เช่น ['2567', '2568']")
+    budgetYears: List[str] = Field(default=["2569"], description="รายการปีงบประมาณ พ.ศ. เช่น ['2569', '2568']")
     transferStartDate: Optional[str] = Field(default="", description="วันที่เริ่มต้น DD/MM/YYYY (พ.ศ.)")
     transferEndDate: Optional[str] = Field(default="", description="วันที่สิ้นสุด DD/MM/YYYY (พ.ศ.)")
     vendorId5Digit: Optional[str] = Field(default="", description="รหัสหน่วยบริการ 5 หลัก")
@@ -56,7 +56,7 @@ def health_check():
 async def search_budget(req: MultiBudgetFilterRequest):
     years = sorted(list(set([y.strip() for y in req.budgetYears if y.strip()])))
     if not years:
-        years = ["2567"]
+        years = ["2569"]
         
     all_items = []
     sources = []

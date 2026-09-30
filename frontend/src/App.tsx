@@ -67,8 +67,8 @@ const API_BASE = import.meta.env.VITE_API_BASE || '';
 const AVAILABLE_YEARS = ['2569', '2568', '2567', '2566', '2565'];
 
 export default function App() {
-  // Multi-Year Filter States
-  const [selectedYears, setSelectedYears] = useState<string[]>(['2567']);
+  // Multi-Year Filter States (Default to latest available year)
+  const [selectedYears, setSelectedYears] = useState<string[]>([AVAILABLE_YEARS[0]]);
   const [vendorId5Digit, setVendorId5Digit] = useState('11152');
   const [zoneId, setZoneId] = useState('');
   
