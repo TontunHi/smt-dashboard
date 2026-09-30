@@ -814,7 +814,7 @@ export default function App() {
             }
           </div>
           <div style={{ height: '320px' }}>
-            <ReactECharts option={yearComparisonChartOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts option={yearComparisonChartOption} notMerge={true} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
 
@@ -833,7 +833,7 @@ export default function App() {
             }
           </div>
           <div style={{ height: '320px' }}>
-            <ReactECharts option={fundGroupChartOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts option={fundGroupChartOption} notMerge={true} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
       </section>
