@@ -145,6 +145,35 @@ export default function App() {
     return () => clearInterval(interval);
   }, [autoRefreshInterval, selectedYears, vendorId5Digit, zoneId]);
 
+  // Helper to calculate Fiscal Year from record (1 Oct - 30 Sep belongs to fiscal year)
+  const getRecordFiscalYear = (r: BudgetRecord): string => {
+    const pDate = String(r.postingDate || '');
+    if (pDate.length >= 6) {
+      const year = parseInt(pDate.substring(0, 4), 10);
+      const month = parseInt(pDate.substring(4, 6), 10);
+      if (!isNaN(year) && !isNaN(month)) {
+        return String(month >= 10 ? year + 1 : year);
+      }
+    }
+    const runDt = String(r.runDt || '');
+    if (runDt.length >= 7) {
+      const parts = runDt.split('-');
+      const gy = parseInt(parts[0], 10);
+      const gm = parseInt(parts[1], 10);
+      if (!isNaN(gy) && !isNaN(gm)) {
+        const by = gy + 543;
+        return String(gm >= 10 ? by + 1 : by);
+      }
+    }
+    return r.fiscalYear || selectedYears[0] || '2568';
+  };
+
+  const thaiMonthNames: { [key: string]: string } = {
+    '01': 'ม.ค.', '02': 'ก.พ.', '03': 'มี.ค.', '04': 'เม.ย.',
+    '05': 'พ.ค.', '06': 'มิ.ย.', '07': 'ก.ค.', '08': 'ส.ค.',
+    '09': 'ก.ย.', '10': 'ต.ค.', '11': 'พ.ย.', '12': 'ธ.ค.'
+  };
+
   // Helper to normalize fund name (handles wording changes across fiscal years)
   const normalizeFundName = (rawName: string | undefined): string => {
     if (!rawName) return '';
@@ -281,7 +310,7 @@ export default function App() {
         const yearAmounts = yearsList.map(yr => {
           const sum = records
             .filter(r => {
-              const matchesYear = r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0]);
+              const matchesYear = getRecordFiscalYear(r) === yr;
               const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
               const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
               return matchesYear && matchesFund && matchesSub;
@@ -293,7 +322,7 @@ export default function App() {
         const yearTotals = yearsList.map(yr => {
           const sum = records
             .filter(r => {
-              const matchesYear = r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0]);
+              const matchesYear = getRecordFiscalYear(r) === yr;
               const matchesFund = selectedFund === 'ALL' || normalizeFundName(r.fundGroupDescr || r.fundName) === selectedFund;
               const matchesSub = selectedSubFund === 'ALL' || (r.efundDesc || r.fundDescr || '').trim() === selectedSubFund;
               return matchesYear && matchesFund && matchesSub;
@@ -308,7 +337,7 @@ export default function App() {
             trigger: 'axis',
             axisPointer: { type: 'shadow' },
             formatter: (params: any) => {
-              let str = `<b>ปีงบประมาณ พ.ศ. ${params[0].name}</b><br/>`;
+              let str = `<b>ปีงบประมาณ ${params[0].name}</b><br/>`;
               params.forEach((p: any) => {
                 str += `${p.marker} ${p.seriesName}: ฿${Number(p.value).toLocaleString('th-TH')}<br/>`;
               });
@@ -323,7 +352,7 @@ export default function App() {
           grid: { left: '3%', right: '4%', bottom: '8%', top: '16%', containLabel: true },
           xAxis: {
             type: 'category',
-            data: yearsList.map(yr => `ปี ${yr}`),
+            data: yearsList.map(yr => `ปีงบ ${yr}`),
             axisLine: { lineStyle: { color: '#cbd5e1' } },
             axisLabel: { color: '#475569', fontSize: 12, fontWeight: 500 }
           },
@@ -358,13 +387,13 @@ export default function App() {
           const colors = ['#059669', '#10b981', '#34d399', '#0d9488', '#14b8a6', '#0284c7'];
           const data = topFunds.map(fundName => {
             const sum = records
-              .filter(r => (r.fiscalYear === yr || (!r.fiscalYear && yr === selectedYears[0])) && (normalizeFundName(r.fundGroupDescr || r.fundName) === normalizeFundName(fundName)))
+              .filter(r => (getRecordFiscalYear(r) === yr) && (normalizeFundName(r.fundGroupDescr || r.fundName) === normalizeFundName(fundName)))
               .reduce((acc, cur) => acc + (Number(cur.amount) || 0), 0);
             return Math.round(sum);
           });
 
           return {
-            name: `ปี พ.ศ. ${yr}`,
+            name: `ปีงบ ${yr}`,
             type: 'bar',
             data,
             itemStyle: { color: colors[idx % colors.length], borderRadius: [4, 4, 0, 0] }
@@ -385,7 +414,7 @@ export default function App() {
             }
           },
           legend: {
-            data: yearsList.map(y => `ปี พ.ศ. ${y}`),
+            data: yearsList.map(y => `ปีงบ ${y}`),
             textStyle: { color: '#475569' },
             top: '0%'
           },
@@ -413,22 +442,53 @@ export default function App() {
         };
       }
     } else {
-      // Single Year: Monthly Trend
-      const monthMap: { [key: string]: { amount: number; net: number } } = {};
-      filteredRecords.forEach(r => {
-        const dateStr = String(r.postingDate || '');
-        let monthLabel = 'ไม่ระบุ';
-        if (dateStr.length >= 6) {
-          const y = dateStr.substring(0, 4);
-          const m = dateStr.substring(4, 6);
-          monthLabel = `${m}/${y}`;
-        }
-        if (!monthMap[monthLabel]) monthMap[monthLabel] = { amount: 0, net: 0 };
-        monthMap[monthLabel].amount += Number(r.amount) || 0;
-        monthMap[monthLabel].net += Number(r.total) || 0;
+      // Single Year: Monthly Trend ordered by Fiscal Year (1 Oct - 30 Sep)
+      const currentYearNum = parseInt(selectedYears[0] || '2568', 10);
+      const prevYearNum = currentYearNum - 1;
+      
+      // Fixed 12 fiscal months in order: 10/prev, 11/prev, 12/prev, 01/curr ... 09/curr
+      const fiscalMonthsOrder = [
+        { key: `${prevYearNum}10`, label: `ต.ค. ${String(prevYearNum).slice(-2)}` },
+        { key: `${prevYearNum}11`, label: `พ.ย. ${String(prevYearNum).slice(-2)}` },
+        { key: `${prevYearNum}12`, label: `ธ.ค. ${String(prevYearNum).slice(-2)}` },
+        { key: `${currentYearNum}01`, label: `ม.ค. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}02`, label: `ก.พ. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}03`, label: `มี.ค. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}04`, label: `เม.ย. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}05`, label: `พ.ค. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}06`, label: `มิ.ย. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}07`, label: `ก.ค. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}08`, label: `ส.ค. ${String(currentYearNum).slice(-2)}` },
+        { key: `${currentYearNum}09`, label: `ก.ย. ${String(currentYearNum).slice(-2)}` },
+      ];
+
+      const monthMap: { [key: string]: { amount: number; net: number; label: string } } = {};
+      fiscalMonthsOrder.forEach(fm => {
+        monthMap[fm.key] = { amount: 0, net: 0, label: fm.label };
       });
 
-      const sortedMonths = Object.keys(monthMap).sort();
+      filteredRecords.forEach(r => {
+        const dateStr = String(r.postingDate || '');
+        if (dateStr.length >= 6) {
+          const key = dateStr.substring(0, 6);
+          if (!monthMap[key]) {
+            const y = key.substring(0, 4);
+            const m = key.substring(4, 6);
+            const thM = thaiMonthNames[m] || m;
+            monthMap[key] = { amount: 0, net: 0, label: `${thM} ${y.slice(-2)}` };
+          }
+          monthMap[key].amount += Number(r.amount) || 0;
+          monthMap[key].net += Number(r.total) || 0;
+        }
+      });
+
+      // Filter to months that exist in the fiscal cycle or have data
+      const activeMonthKeys = fiscalMonthsOrder
+        .map(fm => fm.key)
+        .concat(Object.keys(monthMap).filter(k => !fiscalMonthsOrder.some(fm => fm.key === k)));
+      
+      const distinctActiveKeys = Array.from(new Set(activeMonthKeys));
+
       return {
         backgroundColor: 'transparent',
         tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
@@ -440,7 +500,7 @@ export default function App() {
         grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
         xAxis: {
           type: 'category',
-          data: sortedMonths,
+          data: distinctActiveKeys.map(k => monthMap[k]?.label || k),
           axisLine: { lineStyle: { color: '#cbd5e1' } },
           axisLabel: { color: '#475569', fontSize: 11 }
         },
@@ -457,14 +517,14 @@ export default function App() {
           {
             name: 'ยอดจัดสรร (Amount)',
             type: 'bar',
-            data: sortedMonths.map(m => Math.round(monthMap[m].amount)),
+            data: distinctActiveKeys.map(k => Math.round(monthMap[k]?.amount || 0)),
             itemStyle: { color: '#059669', borderRadius: [4, 4, 0, 0] }
           },
           {
             name: 'ยอดโอนสุทธิ (Net Total)',
             type: 'line',
             smooth: true,
-            data: sortedMonths.map(m => Math.round(monthMap[m].net)),
+            data: distinctActiveKeys.map(k => Math.round(monthMap[k]?.net || 0)),
             itemStyle: { color: '#10b981' },
             lineStyle: { width: 3 }
           }
@@ -482,7 +542,7 @@ export default function App() {
       // Subfund selected: show breakdown by year (if multi-year) or single slice
       if (selectedYears.length > 1) {
         filteredRecords.forEach(r => {
-          const yrName = `ปี ${r.fiscalYear || selectedYears[0]}`;
+          const yrName = `ปีงบ ${getRecordFiscalYear(r)}`;
           groupMap[yrName] = (groupMap[yrName] || 0) + (Number(r.amount) || 0);
         });
       } else {
@@ -495,7 +555,7 @@ export default function App() {
       // If multi-year is active, breakdown by Year!
       if (selectedYears.length > 1) {
         filteredRecords.forEach(r => {
-          const yrName = `ปี ${r.fiscalYear || selectedYears[0]}`;
+          const yrName = `ปีงบ ${getRecordFiscalYear(r)}`;
           groupMap[yrName] = (groupMap[yrName] || 0) + (Number(r.amount) || 0);
         });
       } else {
@@ -615,7 +675,7 @@ export default function App() {
                     className={`year-chip ${isActive ? 'active' : ''}`}
                     onClick={() => handleToggleYear(yr)}
                   >
-                    {isActive ? `✓ ปี ${yr}` : `ปี ${yr}`}
+                    {isActive ? `✓ ปีงบ ${yr}` : `ปีงบ ${yr}`}
                   </button>
                 );
               })}
@@ -670,7 +730,7 @@ export default function App() {
               disabled={loading}
             >
               <Filter size={15} />
-              ดึงข้อมูลงบประมาณ ({selectedYears.map(y => `ปี ${y}`).join(', ')})
+              ดึงข้อมูลงบประมาณ ({selectedYears.map(y => `ปีงบ ${y}`).join(', ')})
             </button>
             <span style={{ fontSize: '12px', color: '#94a3b8' }}>
               * เลือกได้หลายปีพร้อมกัน ระบบจะดึงและนำมารวม/เปรียบเทียบให้อัตโนมัติ
@@ -744,13 +804,13 @@ export default function App() {
             <BarChart3 size={18} color="#38bdf8" />
             {selectedYears.length > 1 
               ? (selectedSubFund !== 'ALL'
-                  ? `เปรียบเทียบกองทุนย่อย "${selectedSubFund}" (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+                  ? `เปรียบเทียบกองทุนย่อย "${selectedSubFund}" (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
                   : (selectedFund !== 'ALL'
-                      ? `เปรียบเทียบ ${selectedFund} (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
-                      : `เปรียบเทียบงบประมาณตามกองทุน (${selectedYears.map(y => `ปี ${y}`).join(' vs ')})`
+                      ? `เปรียบเทียบ ${selectedFund} (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
+                      : `เปรียบเทียบงบประมาณตามกองทุน (${selectedYears.map(y => `ปีงบ ${y}`).join(' vs ')})`
                     )
                 )
-              : `แนวโน้มการโอนงบประมาณรายเดือน (ปี พ.ศ. ${selectedYears[0]})`
+              : `แนวโน้มการโอนงบประมาณรายเดือน (ปีงบประมาณ ${selectedYears[0]})`
             }
           </div>
           <div style={{ height: '320px' }}>
@@ -762,10 +822,10 @@ export default function App() {
           <div className="card-title">
             <PieIcon size={18} color="#a78bfa" />
             {selectedSubFund !== 'ALL'
-              ? `สัดส่วนงบประมาณ ${selectedSubFund} แยกตามปี พ.ศ.`
+              ? `สัดส่วนงบประมาณ ${selectedSubFund} แยกตามปีงบประมาณ`
               : (selectedFund !== 'ALL'
                   ? (selectedYears.length > 1
-                      ? `สัดส่วนงบประมาณ ${selectedFund} แยกตามปี พ.ศ.`
+                      ? `สัดส่วนงบประมาณ ${selectedFund} แยกตามปีงบประมาณ`
                       : `สัดส่วนกองทุนย่อยของ ${selectedFund}`
                     )
                   : 'สัดส่วนงบประมาณตามกลุ่มกองทุน (Budget Breakdown)'
