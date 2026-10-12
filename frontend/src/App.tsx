@@ -64,7 +64,7 @@ interface BudgetSummary {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
-const AVAILABLE_YEARS = ['2569', '2568', '2567', '2566', '2565'];
+const AVAILABLE_YEARS = ['2570', '2569', '2568', '2567', '2566', '2565'];
 
 export default function App() {
   // Multi-Year Filter States (Default to latest available year)
