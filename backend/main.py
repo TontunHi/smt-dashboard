@@ -69,7 +69,7 @@ async def search_budget(req: MultiBudgetFilterRequest):
     
     now = time.time()
     
-    async with httpx.AsyncClient(timeout=45.0, verify=False) as client:
+    async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
         for yr in years:
             yr_num = int(yr) if yr.isdigit() else 2567
             # If date range is customized for single year, use it; otherwise compute default for that year

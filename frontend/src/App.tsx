@@ -65,6 +65,11 @@ interface BudgetSummary {
 
 const API_BASE = import.meta.env.VITE_API_BASE || '';
 const AVAILABLE_YEARS = ['2570', '2569', '2568', '2567', '2566', '2565'];
+const SMT_DIRECT_API = 'https://smt.nhso.go.th/smtf/api/budgetreport/budgetSummaryByVendorReport/search';
+
+// In-memory cache for client-side queries (TTL 10 minutes)
+const clientCache: Record<string, { timestamp: number; data: BudgetRecord[] }> = {};
+const CLIENT_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export default function App() {
   // Multi-Year Filter States (Default to latest available year)
@@ -104,29 +109,89 @@ export default function App() {
     });
   };
 
+  const fetchDirectFromSMT = async (years: string[], force: boolean): Promise<{ items: BudgetRecord[]; isCache: boolean }> => {
+    const allItems: BudgetRecord[] = [];
+    const now = Date.now();
+    let anyFromUpstream = false;
+
+    const promises = years.map(async (yr) => {
+      const yrNum = parseInt(yr, 10) || 2570;
+      const startDt = `01/10/${yrNum - 1}`;
+      const endDt = `30/09/${yrNum}`;
+      const cacheKey = `${yr}_${startDt}_${endDt}_${vendorId5Digit.trim()}_${zoneId.trim()}`;
+
+      if (!force && clientCache[cacheKey]) {
+        const cached = clientCache[cacheKey];
+        if (now - cached.timestamp < CLIENT_CACHE_TTL_MS) {
+          return cached.data;
+        }
+      }
+
+      anyFromUpstream = true;
+      const payload = {
+        budgetYear: yr,
+        transferStartDate: startDt,
+        transferEndDate: endDt,
+        vendorId5Digit: vendorId5Digit.trim(),
+        zoneId: zoneId.trim(),
+        vendorSearchConditionCode: '2',
+        budgetSource: ''
+      };
+
+      const res = await axios.post(SMT_DIRECT_API, payload, {
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8'
+        },
+        timeout: 10000
+      });
+
+      const rawItems = res.data?.datas || [];
+      const itemsWithYear: BudgetRecord[] = rawItems.map((r: any) => ({
+        ...r,
+        fiscalYear: yr
+      }));
+
+      clientCache[cacheKey] = { timestamp: now, data: itemsWithYear };
+      return itemsWithYear;
+    });
+
+    const results = await Promise.all(promises);
+    results.forEach(items => allItems.push(...items));
+    return { items: allItems, isCache: !anyFromUpstream };
+  };
+
   const fetchData = async (forceRefresh = false) => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const response = await axios.post(`${API_BASE}/api/budget/search`, {
-        budgetYears: selectedYears,
-        vendorId5Digit: vendorId5Digit.trim(),
-        zoneId: zoneId.trim(),
-        vendorSearchConditionCode: '2',
-        budgetSource: '',
-        forceRefresh
-      });
+      try {
+        // 1. Direct browser request to NHSO SMT API (Fastest & Bypasses Vercel/Cloud Geo-blocking)
+        const { items, isCache } = await fetchDirectFromSMT(selectedYears, forceRefresh);
+        setRecords(items);
+        setDataSource(isCache ? 'cache' : 'direct');
+      } catch (directErr) {
+        console.warn('Direct SMT request failed, falling back to backend proxy:', directErr);
+        // 2. Fallback to backend proxy
+        const response = await axios.post(`${API_BASE}/api/budget/search`, {
+          budgetYears: selectedYears,
+          vendorId5Digit: vendorId5Digit.trim(),
+          zoneId: zoneId.trim(),
+          vendorSearchConditionCode: '2',
+          budgetSource: '',
+          forceRefresh
+        }, { timeout: 10000 });
 
-      const resData = response.data;
-      setDataSource(resData.source);
-      if (resData.data) {
-        setRecords(resData.data.datas || []);
+        const resData = response.data;
+        setDataSource(resData.source);
+        if (resData.data) {
+          setRecords(resData.data.datas || []);
+        }
       }
       setLastUpdated(new Date().toLocaleTimeString('th-TH'));
       setCurrentPage(1);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.response?.data?.detail || 'เกิดข้อผิดพลาดในการดึงข้อมูลจากระบบ สปสช.');
+      setErrorMsg(err.response?.data?.detail || err.message || 'เกิดข้อผิดพลาดในการดึงข้อมูลจากระบบ สปสช.');
     } finally {
       setLoading(false);
     }
